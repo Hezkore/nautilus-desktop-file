@@ -1,0 +1,101 @@
+#!/bin/bash
+# -*- Mode: sh; coding: utf-8; indent-tabs-mode: t; tab-width: 4 -*-
+#
+# A script for Nautilus to create a desktop file for the selected files
+#
+
+# Path to the directory where the desktop files will be created
+desktop_path="$HOME/.local/share/applications/"
+
+# Append our custom directory to the path
+desktop_path+="user/"
+
+# Create the directory if it doesn't exist
+mkdir -p "$desktop_path"
+
+# Counter for how many files were created
+desktop_files_created=0
+
+# Store error message for a single desktop file
+error_message="Unknown error"
+
+# Create a desktop file for each selected file
+for uri in "$@"; do
+	# Append current path to uri
+	uri="$PWD/$uri"
+	
+	# Make sure it's a file and that it's executable
+	if [ ! -f "$uri" ]; then
+		error_message="The selected item is not a file"
+		continue
+	fi
+	if [ ! -x "$uri" ]; then
+		error_message="The selected file is not executable"
+		continue
+	fi
+	
+	# Get the filename
+	filename=$(basename "$uri")
+	
+	# Prepare the default error message
+	error_message="A desktop file could not be created for $filename"
+	
+	# Make sure the desktop file doesn't already exist
+	if [ -f "$desktop_path$filename.desktop" ]; then
+		error_message="A desktop file already exists for $filename"
+		continue
+	fi
+	
+	# Create the desktop file
+	echo "[Desktop Entry]
+Type=Application
+Encoding=UTF-8
+Name=$filename
+Comment=User created desktop file
+Exec=\"$uri\"
+Icon=
+Terminal=false
+Categories=;
+Keywords=$filename;" > "$desktop_path$filename.desktop"
+
+	# Make sure the file was created
+	if [ ! -f "$desktop_path$filename.desktop" ]; then
+		continue
+	fi
+	
+	# Change the permissions of the desktop file
+	chmod +x "$desktop_path$filename.desktop"
+	
+	# Make sure the permissions were changed
+	if [ ! -x "$desktop_path$filename.desktop" ]; then
+		error_message="The permissions of the desktop file could not be changed"
+		continue
+	fi
+	
+	# Increment the counter
+	desktop_files_created=$((desktop_files_created+1))
+done
+
+# Notify the user via Zenity if any desktop files were created
+if [ $desktop_files_created -gt 0 ]; then
+	# If only one desktop file was created
+	if [ $desktop_files_created -eq 1 ]; then
+		# Tell the user the filename
+		# Also give him the option to edit the file or just click okay
+		zenity --question --text "A desktop file was created for $filename" --ok-label="OK" --cancel-label="Edit"
+		if [ $? -eq 1 ]; then
+			# Edit the file
+			xdg-open "$desktop_path$filename.desktop"
+		fi
+	else # If more than one desktop file was created
+		zenity --info --text "$desktop_files_created desktop files were created"
+	fi
+else
+	# If only one desktop file was requested
+	if [ $# -eq 1 ]; then
+		# Use the error message we prepared earlier
+		zenity --error --text "$error_message"
+	else # If more than one desktop file was requested
+		zenity --error --text "Desktop files could not be created for the selected files"
+	fi
+fi
